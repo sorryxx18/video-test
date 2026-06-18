@@ -2,11 +2,14 @@
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "es2022"],
     "target": "es2020",
-    "module": "commonjs",
+    "module": "ESNext",
     "jsx": "react",
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-    "skipLibCheck": true
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
   }
 }

@@ -24,6 +24,8 @@ export interface VideoSkillProps extends Record<string, unknown> {
   bgVideoSrcs: string[];   // 每句字幕對應一支背景影片
   durationInSeconds: number;
   category: string;
+  bgMusicSrc?: string;     // 可選背景音樂
+  bgMusicVolume?: number;  // 預設 0.15
 }
 
 // ── 進度條 ───────────────────────────────────────────────────────────────────
@@ -173,6 +175,8 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
   bgVideoSrcs,
   durationInSeconds,
   category,
+  bgMusicSrc,
+  bgMusicVolume = 0.15,
 }) => {
   const fps = 30;
 
@@ -198,6 +202,11 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
 
       {/* 底部漸層，讓字幕區更易讀 */}
       <BottomGradient />
+
+      {/* 背景音樂（可選，循環，低音量） */}
+      {bgMusicSrc && (
+        <Audio src={staticFile(bgMusicSrc)} volume={bgMusicVolume} loop />
+      )}
 
       {/* TTS 音軌 */}
       <Audio src={staticFile(audioSrc)} />
