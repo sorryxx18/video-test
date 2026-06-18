@@ -1,0 +1,30 @@
+{
+  "title": "taipei-dome-fire-safety",
+  "category": "🔥 消防安全",
+  "segments": [
+    {
+      "text": "你有去過大巨蛋看演唱會嗎？六萬人同時擠在同一個屋頂下。如果這時候有人喊了一聲『火災』，你知道要往哪裡跑嗎？",
+      "query": "crowd concert taipei stadium"
+    },
+    {
+      "text": "上個月，消防局帶著檢查表突擊了大巨蛋。不是演習，是真的在確認：萬一今晚出事，這棟建築能不能讓你活著走出去。",
+      "query": "fire safety inspection building"
+    },
+    {
+      "text": "他們查了什麼？火警廣播能不能蓋過演唱會的音量、逃生動線有沒有被雜物堵住、煙霧會往哪個方向飄——每一項都是真實的生死細節。",
+      "query": "fire alarm emergency exit smoke"
+    },
+    {
+      "text": "大型場館最危險的不是火本身，是人潮。六萬人同時往出口衝，沒有受過訓練的工作人員引導，就可能演變成踩踏悲劇。",
+      "query": "crowd panic evacuation emergency stadium"
+    },
+    {
+      "text": "消防局說，設備正常只是及格線。真正的關鍵是平時有沒有演練。火災發生後的前三分鐘，是逃生還是傷亡，差別就在這裡。",
+      "query": "fire drill training firefighter"
+    },
+    {
+      "text": "下次走進大巨蛋，花五秒鐘看一眼最近的緊急出口在哪。這個小習慣，搞不好哪天真的救了你自己。",
+      "query": "emergency exit sign safety glow"
+    }
+  ]
+}

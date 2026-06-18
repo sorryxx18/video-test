@@ -1,0 +1,15 @@
+node_modules/
+public/*.mp4
+public/*.mp3
+public/*.jpg
+.env
+tmp_*
+render_m3_*.py
+render_m4_*.py
+render_m5_*.py
+render_m6_*.py
+render_m7_*.py
+render_m8_*.py
+render_taipei_dome_fire*.py
+output*.mp4
+thumbnail.jpg

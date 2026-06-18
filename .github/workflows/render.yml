@@ -1,0 +1,80 @@
+name: Render Video & Send LINE
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_name:
+        description: 'scripts/ 下的 JSON 檔名（不含副檔名）'
+        required: true
+        default: 'example_fire_safety'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y ffmpeg chromium-browser
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Node deps
+        run: bun install
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: pip install edge-tts requests
+
+      - name: Render video
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          python render_video.py \
+            --script scripts/${{ github.event.inputs.script_name }}.json \
+            --output output.mp4 \
+            --gl swiftshader
+
+      - name: Compress if needed
+        run: |
+          SIZE=$(stat -c%s output.mp4)
+          if [ $SIZE -gt 52428800 ]; then
+            ffmpeg -y -i output.mp4 -vcodec libx264 -crf 28 -preset fast -acodec aac output_small.mp4
+            mv output_small.mp4 output.mp4
+          fi
+
+      - name: Extract thumbnail
+        run: ffmpeg -y -i output.mp4 -vframes 1 -q:v 2 thumbnail.jpg
+
+      - name: Create GitHub Release and upload assets
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="render-${{ github.event.inputs.script_name }}-${{ github.run_id }}"
+          gh release create "$TAG" output.mp4 thumbnail.jpg \
+            --title "Render: ${{ github.event.inputs.script_name }}" \
+            --notes "Auto-generated video" \
+            --prerelease
+          VIDEO_URL=$(gh release view "$TAG" --json assets --jq '.assets[] | select(.name=="output.mp4") | .browserDownloadUrl')
+          PREVIEW_URL=$(gh release view "$TAG" --json assets --jq '.assets[] | select(.name=="thumbnail.jpg") | .browserDownloadUrl')
+          echo "video_url=$VIDEO_URL" >> $GITHUB_OUTPUT
+          echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+
+      - name: Send to LINE
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: |
+          python line_sender.py \
+            --video-url "${{ steps.release.outputs.video_url }}" \
+            --preview-url "${{ steps.release.outputs.preview_url }}"
