@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,10 +18,25 @@ import requests
 
 REMOTION_DIR = Path(__file__).parent
 VOICE = "zh-TW-HsiaoChenNeural"
+PUNCTUATION_WORDS = {"dash", "period", "comma", "dot", "ellipsis", "slash", "hyphen", "underscore"}
+
+
+def to_ssml(text: str) -> str:
+    text = re.sub(r'([。！？])', r'\1<break time="350ms"/>', text)
+    text = re.sub(r'([，；])', r'\1<break time="150ms"/>', text)
+    text = re.sub(r'(——|…)', r'\1<break time="250ms"/>', text)
+    text = re.sub(r'(\d+)', r'<emphasis level="moderate">\1</emphasis>', text)
+    return f'<speak>{text}</speak>'
+
+
+def check_punctuation_leaks(words: list[dict], segment_index: int) -> None:
+    leaks = [w["word"] for w in words if w["word"].strip().lower() in PUNCTUATION_WORDS]
+    if leaks:
+        print(f"⚠️ 段落 {segment_index + 1} TTS 標點漏讀: {leaks}")
 
 
 async def generate_tts(text: str, path: str) -> tuple[float, list[dict]]:
-    communicate = edge_tts.Communicate(text, voice=VOICE)
+    communicate = edge_tts.Communicate(to_ssml(text), voice=VOICE)
     word_timestamps: list[dict] = []
     audio_chunks: list[bytes] = []
 
@@ -85,6 +101,26 @@ def download_pexels(query: str, path: str) -> None:
             fh.write(chunk)
 
 
+def download_pixabay(query: str, path: str) -> None:
+    api_key = os.environ.get("PIXABAY_API_KEY", "")
+    if not api_key:
+        raise ValueError("PIXABAY_API_KEY not set")
+    resp = requests.get(
+        "https://pixabay.com/api/videos/",
+        params={"q": query, "per_page": 5, "video_type": "film", "orientation": "vertical", "key": api_key},
+        timeout=15,
+    ).json()
+    hits = resp.get("hits", [])
+    if not hits:
+        raise ValueError(f"Pixabay: no results for '{query}'")
+    videos = hits[0]["videos"]
+    best = max(videos.values(), key=lambda v: v.get("width", 0))
+    r = requests.get(best["url"], stream=True, timeout=60)
+    with open(path, "wb") as fh:
+        for chunk in r.iter_content(chunk_size=8192):
+            fh.write(chunk)
+
+
 def concat_audio(audio_paths: list, output_path: str) -> None:
     list_file = str(REMOTION_DIR / "tmp_concat_list.txt")
     with open(list_file, "w") as fh:
@@ -143,6 +179,7 @@ async def main(script_path: str, output: str, gl: str) -> None:
         print(f"[{i+1}/{len(segments)}] TTS: {text[:30]}...")
         audio_path = str(tmp / f"seg_{i:02d}.mp3")
         duration, words = await generate_tts(text, audio_path)
+        check_punctuation_leaks(words, i)
         audio_paths.append(audio_path)
 
         subtitles.append({
@@ -155,7 +192,11 @@ async def main(script_path: str, output: str, gl: str) -> None:
 
         print(f"          Pexels [{query[:28]}]...")
         bg_tmp = str(tmp / f"bg_{i:02d}.mp4")
-        download_pexels(query, bg_tmp)
+        try:
+            download_pexels(query, bg_tmp)
+        except Exception as e:
+            print(f"          ⚠️ Pexels failed ({e}), trying Pixabay...")
+            download_pixabay(query, bg_tmp)
         bg_name = f"bg{i:02d}.mp4"
         shutil.copy(bg_tmp, public_dir / bg_name)
         bg_names.append(bg_name)

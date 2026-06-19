@@ -155,6 +155,33 @@ const KenBurnsPhoto: React.FC<{ src: string; index: number }> = ({ src, index })
   );
 };
 
+interface BackgroundSegmentProps {
+  bgSrc: string;
+  duration: number;
+  index: number;
+}
+
+const BackgroundSegment: React.FC<BackgroundSegmentProps> = ({ bgSrc, duration, index }) => {
+  const frame = useCurrentFrame();
+  const FADE = 12;
+  const opacity = interpolate(
+    frame,
+    [0, FADE, duration - FADE, duration],
+    [0, 1, 1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+  );
+
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      {/\.(jpg|jpeg|png|webp)$/i.test(bgSrc) ? (
+        <KenBurnsPhoto src={staticFile(bgSrc)} index={index} />
+      ) : (
+        <Video src={staticFile(bgSrc)} loop style={{ opacity: 0.72, objectFit: 'cover' }} />
+      )}
+    </AbsoluteFill>
+  );
+};
+
 // ── 字幕（數字/單位自動標黃）────────────────────────────────────────────────
 
 const highlightText = (text: string): React.ReactNode[] => {
@@ -271,13 +298,7 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
         const duration = Math.max(1, Math.floor((sub.endSec - sub.startSec) * fps));
         return (
           <Sequence key={`bg-${i}`} from={from} durationInFrames={duration}>
-            <AbsoluteFill>
-              {/\.(jpg|jpeg|png|webp)$/i.test(bgSrc) ? (
-                <KenBurnsPhoto src={staticFile(bgSrc)} index={i} />
-              ) : (
-                <Video src={staticFile(bgSrc)} loop style={{ opacity: 0.72, objectFit: 'cover' }} />
-              )}
-            </AbsoluteFill>
+            <BackgroundSegment bgSrc={bgSrc} duration={duration} index={i} />
           </Sequence>
         );
       })}
@@ -287,7 +308,38 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
 
       {/* 背景音樂（可選，循環，低音量） */}
       {bgMusicSrc && (
-        <Audio src={staticFile(bgMusicSrc)} volume={bgMusicVolume} loop />
+        <Audio
+          src={staticFile(bgMusicSrc)}
+          volume={(f: number) => {
+            const timeSec = f / fps;
+            let inSub = false;
+            let framesFromEdge = Infinity;
+            for (const sub of subtitles) {
+              const fromStart = (timeSec - sub.startSec) * fps;
+              const fromEnd = (sub.endSec - timeSec) * fps;
+              if (fromStart >= 0 && fromEnd >= 0) {
+                inSub = true;
+                framesFromEdge = Math.min(fromStart, fromEnd);
+                break;
+              }
+              framesFromEdge = Math.min(framesFromEdge, Math.abs(fromStart), Math.abs(fromEnd));
+            }
+            const FADE_FRAMES = 20;
+            const low = (bgMusicVolume ?? 0.15) * 0.25;
+            const high = bgMusicVolume ?? 0.15;
+            if (inSub) {
+              return interpolate(Math.min(framesFromEdge, FADE_FRAMES), [0, FADE_FRAMES], [high, low], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+              });
+            }
+            return interpolate(Math.min(framesFromEdge, FADE_FRAMES), [0, FADE_FRAMES], [low, high], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            });
+          }}
+          loop
+        />
       )}
 
       {/* TTS 音軌 */}
