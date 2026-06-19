@@ -16,6 +16,13 @@ interface SubtitleEntry {
   startSec: number;
   endSec: number;
   text: string;
+  words?: WordTimestamp[];
+}
+
+export interface WordTimestamp {
+  word: string;
+  startMs: number;
+  durationMs: number;
 }
 
 export interface VideoSkillProps extends Record<string, unknown> {
@@ -24,6 +31,7 @@ export interface VideoSkillProps extends Record<string, unknown> {
   bgVideoSrcs: string[];   // 每句字幕對應一支背景影片
   durationInSeconds: number;
   category: string;
+  wordTimestamps?: WordTimestamp[][];
   bgMusicSrc?: string;     // 可選背景音樂
   bgMusicVolume?: number;  // 預設 0.15
 }
@@ -116,6 +124,37 @@ const Watermark: React.FC = () => (
   </AbsoluteFill>
 );
 
+const KenBurnsPhoto: React.FC<{ src: string; index: number }> = ({ src, index }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const progress = frame / durationInFrames;
+
+  const startScale = 1.0;
+  const endScale = 1.12;
+  const scale = interpolate(progress, [0, 1], [startScale, endScale]);
+  const txStart = index % 2 === 0 ? 0 : 2;
+  const txEnd = index % 2 === 0 ? 2 : 0;
+  const tyStart = index % 3 === 0 ? 0 : 1;
+  const tyEnd = index % 3 === 0 ? 1 : 0;
+  const tx = interpolate(progress, [0, 1], [txStart, txEnd]);
+  const ty = interpolate(progress, [0, 1], [tyStart, tyEnd]);
+
+  return (
+    <AbsoluteFill style={{ overflow: 'hidden' }}>
+      <Img
+        src={src}
+        style={{
+          objectFit: 'cover',
+          width: '100%',
+          height: '100%',
+          opacity: 0.72,
+          transform: `scale(${scale}) translate(${tx}%, ${ty}%)`,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
 // ── 字幕（數字/單位自動標黃）────────────────────────────────────────────────
 
 const highlightText = (text: string): React.ReactNode[] => {
@@ -167,6 +206,48 @@ const SubtitleLine: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
+const WordCaptionLine: React.FC<{ words: WordTimestamp[]; segmentStartSec: number }> = ({
+  words,
+  segmentStartSec: _segmentStartSec,
+}) => {
+  const frame = useCurrentFrame();
+  const currentMs = (frame / 30) * 1000;
+
+  return (
+    <AbsoluteFill
+      style={{ justifyContent: 'flex-end', alignItems: 'center', padding: '0 52px 96px' }}
+    >
+      <div style={{ maxWidth: '90%', textAlign: 'center' }}>
+        <span
+          style={{
+            fontSize: 50,
+            fontFamily: 'Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif',
+            fontWeight: 600,
+            lineHeight: 1.55,
+            letterSpacing: 1,
+            textShadow: '0 2px 16px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.8)',
+          }}
+        >
+          {words.map((w, i) => {
+            const active = currentMs >= w.startMs && currentMs < w.startMs + w.durationMs;
+            return (
+              <span
+                key={i}
+                style={{
+                  color: active ? '#FFD700' : '#ffffff',
+                  fontWeight: active ? 700 : 600,
+                }}
+              >
+                {w.word}
+              </span>
+            );
+          })}
+        </span>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 // ── 主元件 ───────────────────────────────────────────────────────────────────
 
 export const VideoSkill: React.FC<VideoSkillProps> = ({
@@ -175,6 +256,7 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
   bgVideoSrcs,
   durationInSeconds,
   category,
+  wordTimestamps,
   bgMusicSrc,
   bgMusicVolume = 0.15,
 }) => {
@@ -191,7 +273,7 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
           <Sequence key={`bg-${i}`} from={from} durationInFrames={duration}>
             <AbsoluteFill>
               {/\.(jpg|jpeg|png|webp)$/i.test(bgSrc) ? (
-                <Img src={staticFile(bgSrc)} style={{ opacity: 0.72, objectFit: 'cover', width: '100%', height: '100%' }} />
+                <KenBurnsPhoto src={staticFile(bgSrc)} index={i} />
               ) : (
                 <Video src={staticFile(bgSrc)} loop style={{ opacity: 0.72, objectFit: 'cover' }} />
               )}
@@ -224,9 +306,14 @@ export const VideoSkill: React.FC<VideoSkillProps> = ({
       {subtitles.map((sub, i) => {
         const from = Math.floor(sub.startSec * fps);
         const duration = Math.max(1, Math.floor((sub.endSec - sub.startSec) * fps));
+        const words = wordTimestamps?.[i];
         return (
           <Sequence key={`sub-${i}`} from={from} durationInFrames={duration}>
-            <SubtitleLine text={sub.text} />
+            {words && words.length > 0 ? (
+              <WordCaptionLine words={words} segmentStartSec={sub.startSec} />
+            ) : (
+              <SubtitleLine text={sub.text} />
+            )}
           </Sequence>
         );
       })}

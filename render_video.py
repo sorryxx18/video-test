@@ -19,13 +19,54 @@ REMOTION_DIR = Path(__file__).parent
 VOICE = "zh-TW-HsiaoChenNeural"
 
 
-async def generate_tts(text: str, path: str) -> float:
-    await edge_tts.Communicate(text, voice=VOICE).save(path)
+async def generate_tts(text: str, path: str) -> tuple[float, list[dict]]:
+    communicate = edge_tts.Communicate(text, voice=VOICE)
+    word_timestamps: list[dict] = []
+    audio_chunks: list[bytes] = []
+
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_chunks.append(chunk["data"])
+        elif chunk["type"] == "WordBoundary":
+            word_timestamps.append({
+                "word": chunk["text"],
+                "startMs": chunk["offset"] / 10_000,
+                "durationMs": chunk["duration"] / 10_000,
+            })
+
+    with open(path, "wb") as f:
+        for c in audio_chunks:
+            f.write(c)
+
     result = subprocess.run(
         ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", path],
         capture_output=True, text=True, check=True,
     )
-    return float(json.loads(result.stdout)["format"]["duration"])
+    duration = float(json.loads(result.stdout)["format"]["duration"])
+    return duration, word_timestamps
+
+
+def validate_output(output_path: str) -> None:
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json",
+         "-show_format", "-show_streams", output_path],
+        capture_output=True, text=True, check=True,
+    )
+    info = json.loads(result.stdout)
+
+    duration = float(info["format"]["duration"])
+    if duration < 1.0:
+        raise ValueError(f"Output too short: {duration:.1f}s")
+
+    has_video = any(s["codec_type"] == "video" for s in info.get("streams", []))
+    has_audio = any(s["codec_type"] == "audio" for s in info.get("streams", []))
+
+    if not has_video:
+        raise ValueError("Output has no video stream")
+    if not has_audio:
+        raise ValueError("Output has no audio stream")
+
+    print(f"✅ 驗證通過：{duration:.1f}s，有影像+音訊")
 
 
 def download_pexels(query: str, path: str) -> None:
@@ -68,19 +109,40 @@ async def main(script_path: str, output: str, gl: str) -> None:
     tmp.mkdir(exist_ok=True)
     public_dir = REMOTION_DIR / "public"
     public_dir.mkdir(exist_ok=True)
+    checkpoint_path = tmp / "checkpoint.json"
+    checkpoint_tmp_path = tmp / "checkpoint.json.tmp"
 
     print(f"📝 {len(segments)} 個段落，開始生成...\n")
 
-    audio_paths, bg_names, subtitles = [], [], []
+    audio_paths: list[str] = []
+    bg_names: list[str] = []
+    subtitles: list[dict] = []
+    all_word_timestamps: list[list[dict]] = []
     current_time = 0.0
+    segments_done: set[int] = set()
+
+    if checkpoint_path.exists():
+        with open(checkpoint_path) as f:
+            checkpoint = json.load(f)
+        if checkpoint.get("title") == title:
+            audio_paths = checkpoint["audio_paths"]
+            bg_names = checkpoint["bg_names"]
+            subtitles = checkpoint["subtitles"]
+            all_word_timestamps = checkpoint["word_timestamps"]
+            current_time = checkpoint["current_time"]
+            segments_done = set(checkpoint["segments_done"])
+            print(f"♻️ Resuming from checkpoint, {len(segments_done)} segments already done")
 
     for i, seg in enumerate(segments):
+        if i in segments_done:
+            continue
+
         text = seg["text"]
         query = seg["query"]
 
         print(f"[{i+1}/{len(segments)}] TTS: {text[:30]}...")
         audio_path = str(tmp / f"seg_{i:02d}.mp3")
-        duration = await generate_tts(text, audio_path)
+        duration, words = await generate_tts(text, audio_path)
         audio_paths.append(audio_path)
 
         subtitles.append({
@@ -88,6 +150,7 @@ async def main(script_path: str, output: str, gl: str) -> None:
             "endSec": round(current_time + duration, 3),
             "text": text,
         })
+        all_word_timestamps.append(words)
         current_time += duration
 
         print(f"          Pexels [{query[:28]}]...")
@@ -97,6 +160,20 @@ async def main(script_path: str, output: str, gl: str) -> None:
         shutil.copy(bg_tmp, public_dir / bg_name)
         bg_names.append(bg_name)
         print(f"          ✓ {duration:.1f}s  累計: {current_time:.1f}s\n")
+
+        segments_done.add(i)
+        checkpoint_data = {
+            "title": title,
+            "segments_done": sorted(segments_done),
+            "audio_paths": audio_paths,
+            "bg_names": bg_names,
+            "subtitles": subtitles,
+            "word_timestamps": all_word_timestamps,
+            "current_time": current_time,
+        }
+        with open(checkpoint_tmp_path, "w") as f:
+            json.dump(checkpoint_data, f, ensure_ascii=False)
+        os.replace(checkpoint_tmp_path, checkpoint_path)
 
     print("🔗 合併音軌...")
     full_audio = str(tmp / "tts_full.mp3")
@@ -109,6 +186,7 @@ async def main(script_path: str, output: str, gl: str) -> None:
         "bgVideoSrcs": bg_names,
         "durationInSeconds": round(current_time + 0.5, 2),
         "category": category,
+        "wordTimestamps": all_word_timestamps,
     }
 
     print(f"🎬 Remotion 渲染中... (總時長 {current_time:.1f}s)")
@@ -120,8 +198,10 @@ async def main(script_path: str, output: str, gl: str) -> None:
         check=True, cwd=str(REMOTION_DIR),
     )
     print(f"\n✅ 完成：{output}")
+    validate_output(output)
 
     # 清理暫存
+    checkpoint_path.unlink(missing_ok=True)
     shutil.rmtree(tmp, ignore_errors=True)
     for name in bg_names:
         (public_dir / name).unlink(missing_ok=True)
