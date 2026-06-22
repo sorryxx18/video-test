@@ -170,8 +170,8 @@ interface CommandResult {
   durationMs: number;
 }
 
-const PROJECT_DIR = "/Users/leifhuang/video-skill-remotion";
-const TMP_ROOT = "/tmp/line-bot-images";
+const PROJECT_DIR = import.meta.dir;
+const TMP_ROOT = join(PROJECT_DIR, ".tmp-line-bot-images");
 const SCRIPTS_ROOT = join(PROJECT_DIR, "scripts", "generated");
 const OUTPUT_ROOT = join(PROJECT_DIR, "outputs");
 const SESSION_ROOT = join(TMP_ROOT, "sessions");
