@@ -31,9 +31,15 @@ sudo apt install python3 python3-pip ffmpeg -y && curl -fsSL https://bun.sh/inst
 git clone https://github.com/sorryxx18/video-test.git && cd video-test && pip3 install edge-tts requests && bun install
 ```
 
-## 設定 API Key
+## 設定環境變數
 
-免費申請：[pexels.com/api](https://www.pexels.com/api/)
+複製範本後填入你自己的值：
+```bash
+cp .env.example .env
+# 用編輯器開啟 .env，填入每個欄位
+```
+
+各欄位說明在 .env.example 裡都有註解。
 
 ```bash
 # Mac / Linux（加到 ~/.zshrc 永久生效）
