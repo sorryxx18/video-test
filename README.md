@@ -2,39 +2,46 @@
 
 中文 TTS 語音 + Pexels 真實影片背景 + Remotion 渲染，自動生成直式 MP4，內含動態字幕。
 
-## 快速安裝
+## 安裝
 
-### 事先安裝
-
-| 工具 | 安裝方式 |
-|------|---------|
-| Python 3.10+ | [python.org](https://www.python.org/downloads/) |
-| Bun | `curl -fsSL https://bun.sh/install \| bash`（Mac/Linux）或 [bun.sh](https://bun.sh)（Windows） |
-| FFmpeg | `brew install ffmpeg`（Mac）/ `choco install ffmpeg`（Windows）/ `apt install ffmpeg`（Linux） |
-
-### 一行裝完
-
-**Mac / Linux**
+**Mac**
 ```bash
-git clone https://github.com/sorryxx18/video-test.git && cd video-test && pip install edge-tts requests && bun install
+# 1. 安裝前置工具（一行）
+brew install python3 bun ffmpeg
+
+# 2. Clone 並安裝套件（一行）
+git clone https://github.com/sorryxx18/video-test.git && cd video-test && pip3 install edge-tts requests && bun install
 ```
 
-**Windows（PowerShell）**
+**Windows（PowerShell 系統管理員）**
 ```powershell
+# 1. 安裝前置工具（一行）
+winget install Python.Python.3 Bun.Bun Gyan.FFmpeg
+
+# 2. Clone 並安裝套件（一行，開新終端機再執行）
 git clone https://github.com/sorryxx18/video-test.git; cd video-test; pip install edge-tts requests; bun install
 ```
 
-### 設定 API Key
+**Linux**
+```bash
+# 1. 安裝前置工具
+sudo apt install python3 python3-pip ffmpeg -y && curl -fsSL https://bun.sh/install | bash
+
+# 2. Clone 並安裝套件
+git clone https://github.com/sorryxx18/video-test.git && cd video-test && pip3 install edge-tts requests && bun install
+```
+
+## 設定 API Key
+
+免費申請：[pexels.com/api](https://www.pexels.com/api/)
 
 ```bash
-# Mac / Linux
+# Mac / Linux（加到 ~/.zshrc 或 ~/.bashrc 永久生效）
 export PEXELS_API_KEY=你的key
 
 # Windows
 set PEXELS_API_KEY=你的key
 ```
-
-免費申請：[pexels.com/api](https://www.pexels.com/api/)
 
 ## 生成影片
 
@@ -50,11 +57,11 @@ python render_taipei_weather_0622.py
 
 ## 製作新一天的天氣影片
 
-複製最新的模板，修改 `SEGMENTS` 和 `OUTPUT`：
-
 ```bash
 cp render_taipei_weather_0622.py render_taipei_weather_0623.py
 ```
+
+用編輯器開啟，修改 `SEGMENTS`（旁白 + 搜尋關鍵字）和 `OUTPUT`（輸出檔名）即可。
 
 每個 segment 格式：`("中文旁白內容", "pexels 英文搜尋關鍵字")`
 
@@ -62,7 +69,7 @@ cp render_taipei_weather_0622.py render_taipei_weather_0623.py
 
 `pexels_utils.py` 把每次用過的 Pexels 影片 ID 記錄在 `used_video_ids.json`，下次執行自動跳過，天天做都不會撞到同一支影片。
 
-## 影片超過 50MB（Telegram 上限）
+## 影片超過 50MB（Telegram 上限）壓縮
 
 ```bash
 ffmpeg -y -i input.mp4 -vcodec libx264 -crf 28 -preset fast -vf scale=720:-2 -acodec aac -b:a 96k output-compressed.mp4
