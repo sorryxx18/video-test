@@ -13,3 +13,10 @@ render_m8_*.py
 render_taipei_dome_fire*.py
 output*.mp4
 thumbnail.jpg
+__pycache__/
+.tmp-line-bot-images/
+used_video_ids.json
+scripts/generated/
+outputs/
+ISA.md
+scripts/*.json
